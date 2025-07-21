@@ -7,11 +7,15 @@ import numpy as np
 from tqdm import tqdm
 from termcolor import colored
 from program_translator import ProgramTranslator
-from config import config
+from config import config, loadDatasetConfig, parseArgs
 from nltk.tokenize import word_tokenize
 import re
 import math
 from collections import defaultdict
+
+
+parseArgs()    
+loadDatasetConfig[config.dataset]()
 
 # Print bold tex
 def bold(txt):
@@ -30,23 +34,23 @@ def writelist(f, l):
     writeline(f, ",".join(map(str, l)))
 
 # 2d list to numpy
-def vectorize2DList(items, minX = 0, minY = 0, dtype = np.int):
+def vectorize2DList(items, minX = 0, minY = 0, dtype = int):
     maxX = max(len(items), minX)
     maxY = max([len(item) for item in items] + [minY])
     t = np.zeros((maxX, maxY), dtype = dtype)
-    tLengths = np.zeros((maxX, ), dtype = np.int)
+    tLengths = np.zeros((maxX, ), dtype = int)
     for i, item in enumerate(items):
         t[i, 0:len(item)] = np.array(item, dtype = dtype)
         tLengths[i] = len(item)
     return t, tLengths
 
 # 3d list to numpy
-def vectorize3DList(items, minX = 0, minY = 0, minZ = 0, dtype = np.int):
+def vectorize3DList(items, minX = 0, minY = 0, minZ = 0, dtype = int):
     maxX = max(len(items), minX)
     maxY = max([len(item) for item in items] + [minY])
     maxZ = max([len(subitem) for item in items for subitem in item] + [minZ])
     t = np.zeros((maxX, maxY, maxZ), dtype = dtype)
-    tLengths = np.zeros((maxX, maxY), dtype = np.int)
+    tLengths = np.zeros((maxX, maxY), dtype = int)
     for i, item in enumerate(items):
         for j, subitem in enumerate(item):
             t[i, j, 0:len(subitem)] = np.array(subitem, dtype = dtype)
@@ -773,6 +777,57 @@ class Preprocesser(object):
 
         return instances
 
+    def readKGVQA(self, datasetFilename, instancesFilename, tier, updateVocab, imageIndex = None):
+        instances = []
+
+        if os.path.exists(instancesFilename):
+            instances = self.readInstances(instancesFilename)
+        else:
+            with open(datasetFilename[0], "r") as datasetFile:
+                data = json.load(datasetFile)
+            for i in tqdm(range(len(data)), desc = "Preprocessing"):
+                instance = data[i]
+
+                questionStr = instance["question"]
+                question = self.processText(questionStr)
+
+                if updateVocab or (not config.wrdEmbQUnk):
+                    self.questionDict.addSymbols(question)
+                    self.qaDict.addSymbols(question)
+
+                answer = instance.get("answer", "yes") # DUMMY_ANSWER
+                
+                if updateVocab or (not config.wrdEmbAUnk):
+                    self.answerDict.addSymbols(answer)
+                    self.qaDict.addSymbols(answer)
+
+                dummyProgram = [{"function": "FUNC", "value_inputs": [], "inputs": []}]
+                program = instance.get("program", dummyProgram)
+                postfixProgram = self.programTranslator.programToPostfixProgram(program)
+                programSeq = self.programTranslator.programToSeq(postfixProgram)
+                programInputs = self.programTranslator.programToInputs(postfixProgram, offset = 2)
+                
+                # idxes = [int(os.path.splitext(fn)[0].split('_')[-1]) for fn in instance["image_paths"]]
+                idx = int(os.path.splitext(instance["image_paths"][1])[0].split('_')[-1])
+
+                instances.append({
+                        "questionStr": questionStr,
+                        "question": question,
+                        "answer": answer,
+                        "imageId": {"group": tier, "id": instance["image_paths"][1], "idx": idx},
+                        "program": program,
+                        "programSeq": programSeq,
+                        "programInputs": programInputs,
+                        "tier": tier,
+                        "index": i
+                        })
+
+            random.shuffle(instances)
+
+            self.writeInstances(instances, instancesFilename)
+
+        return instances
+
     def encodeQuestionStr(self, questionStr):
         qDict = self.qaDict if config.ansEmbMod == "SHARED" else self.questionDict
         question = self.vqaProcessText(questionStr, True, True)
@@ -791,7 +846,8 @@ class Preprocesser(object):
             "CLEVR": self.readCLEVR,
             "NLVR": self.readNLVR,
             "VQA": self.readVQA,
-            "GQA": self.readGQA
+            "GQA": self.readGQA,
+            "KGVQA": self.readKGVQA
         }
 
         return datasetReader[config.dataset](datasetFilename, instancesFilename, tier, updateVocab, imageIndex)
@@ -808,12 +864,15 @@ class Preprocesser(object):
             datasetFilename = [config.dataFile("all_submission_data.json")]
             instancesFilename = config.instancesFile(tier)
         else:
-            datasetFilename = [config.datasetFile(tier)]
+            datasetFilename = [config.datasetFile(tier).replace("_train", f"_{tier}")]
             instancesFilename = config.instancesFile(tier)
 
         imgsInfoFilename = config.imgsInfoFile(tier)        
-        with open(imgsInfoFilename, "r") as file:
-            imageIndex = json.load(file)  
+        try:
+            with open(imgsInfoFilename, "r") as file:
+                imageIndex = json.load(file)
+        except FileNotFoundError:
+            imageIndex = None
         instances = self.readData(datasetFilename, instancesFilename, tier, train, imageIndex) # updateVocab = 
 
         images = {tier: {"imagesFilename": imagesFilename, "imgsInfoFilename": imgsInfoFilename}}       
@@ -833,7 +892,8 @@ class Preprocesser(object):
         if config.submission:
             dataset["test"] = self.readTier("submission" + suffix, train = False)
         else:
-            dataset["test"] = self.readTier("testdev" + suffix, train = False)
+            # dataset["test"] = self.readTier("testdev" + suffix, train = False)
+            dataset["test"] = self.readTier("test" + suffix, train = False)
         
         if hasTrain:
             dataset["evalTrain"] = {}
@@ -1234,6 +1294,5 @@ class Preprocesser(object):
         # config.questionWordsNum = self.questionDict.getNumSymbols()
         # config.answerDelta = 4
         config.answerWordsNum = self.answerDict.getNumSymbols() # - config.answerDelta
-        print("answerWordsNum")
-        print(config.answerWordsNum)
+        print("answerWordsNum:", config.answerWordsNum)
         return data, embeddings, self.answerDict, self.questionDict

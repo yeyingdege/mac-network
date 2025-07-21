@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 import ops
-from config import config
+from config import config, loadDatasetConfig, parseArgs
 from mac_cell import MACCell
 '''
 The MAC network model. It performs reasoning processes to answer a question over
@@ -21,6 +21,8 @@ to perform the reasoning process over the question and image.
 The output unit: a classifier that receives the question and final state of the MAC
 network and uses them to compute log-likelihood over the possible one-word answers.       
 '''
+parseArgs()    
+loadDatasetConfig[config.dataset]()
 class MACnet(object):
 
     '''Initialize the class.

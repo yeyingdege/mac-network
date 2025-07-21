@@ -105,7 +105,7 @@ def parseArgs():
     ################ systems
 
     # gpus and memory
-    parser.add_argument("--gpus",           default = "", type = str,       help = "comma-separated list of gpus to use")
+    parser.add_argument("--gpus",           default = "0", type = str,       help = "comma-separated list of gpus to use")
     parser.add_argument("--gpusNum",        default = 1, type = int,        help = "number of gpus to use")
     
     parser.add_argument("--allowGrowth",    action = "store_true",          help = "allow gpu memory growth")
@@ -135,8 +135,8 @@ def parseArgs():
     parser.add_argument("--expName",        default = "experiment", type = str,    help = "experiment name") 
 
     # data files
-    parser.add_argument("--dataset",         default = "CLEVR", choices = ["CLEVR", "NLVR", "VQA", "GQA", "VG", "V7W"], type = str) # 
-    parser.add_argument("--dataBasedir",     default = "./", type = str,            help = "data base directory") 
+    parser.add_argument("--dataset",         default = "KGVQA", choices = ["CLEVR", "NLVR", "VQA", "GQA", "VG", "V7W", "KGVQA"], type = str) # 
+    parser.add_argument("--dataBasedir",     default = "data/coin-image", type = str,            help = "data base directory") 
     parser.add_argument("--subdir",          default = "./", type = str,            help = "data base directory") 
     parser.add_argument("--generatedPrefix", default = "gen", type = str,           help = "prefix for generated data files") 
     parser.add_argument("--valFilenames",    default = [], nargs = "*", type = str) 
@@ -149,7 +149,7 @@ def parseArgs():
     # parser.add_argument("--featureType",     default = "norm_128x32", type = str,   help = "features type") #   
     # resnet101_512x128, norm_400x100, none_80x20, normPerImage_80x20, norm_80x20
     parser.add_argument("--dataVer",         default = 2, type = int) # VQA
-    parser.add_argument("--dataSubset",      default = "balanced", type = str) # VQA
+    parser.add_argument("--dataSubset",      default = "train", type = str) # VQA
     parser.add_argument("--ansFormat",       default = "oe", choices = ["oe", "mc"], type = str) # open-ended, multiple-choices # VQA
     parser.add_argument("--ansTokenize",     action = "store_true") # VQA tokenize answer words into list
     # if true, then prediction has to be sentence prediction, like in captioning (NOT SUPPORTED YET)
@@ -212,7 +212,7 @@ def parseArgs():
     parser.add_argument("--lr",             default = 0.0003, type = float, help = "learning rate")
     parser.add_argument("--lrReduce",       action = "store_true",          help = "reduce learning rate if training loss doesn't go down (manual annealing)")    
     parser.add_argument("--lrDecayRate",    default = 0.5, type = float,    help = "learning decay rate if training loss doesn't go down")
-    parser.add_argument("--earlyStopping",  default = 0, type = int,        help = "if positive, stop if no improvement for that number of epochs")
+    parser.add_argument("--earlyStopping",  default = 10, type = int,        help = "if positive, stop if no improvement for that number of epochs")
 
     parser.add_argument("--adam",           action = "store_true",          help = "use adam")   
     parser.add_argument("--l2",             default = 0, type = float,      help = "if positive, add l2 loss term")    
@@ -564,6 +564,30 @@ def configVQA():
     if config.ansFormat == "mc":
         config.answerMod = "MUL" if config.answerMod == "NON" else config.answerMod
 
+def configKGVQA():
+    config.dataPath = "{dataBasedir}".format(dataBasedir = config.dataBasedir)
+    config.generatedPrefix += "_{featureType}_".format(featureType = config.featureType)
+    config.datasetFilename = "mac_{dataSubset}.json".format(dataSubset = config.dataSubset)
+    config.imagesFilename = "{dataSubset}.h5".format(dataSubset = config.dataSubset)
+    config.wordVectorsFile = "data/glove.6B.{dim}d.txt".format(dim = config.wrdQEmbDim) #
+    config.wordVectorsSemanticFile = "data/glove.6B.{dim}d.txt".format(dim = config.semanticWordsEmbDim) #
+    # config.wrdEmbQFixed = True
+    # config.controlContextual = True
+    config.controlInWordsProj = True
+    config.controlOutWordsProj = True
+    config.ansEmbMod = "BOTH"
+    config.npy = True
+    config.train = True
+    config.test = True
+    config.finalTest = True
+    config.getPreds = True
+    # config.encProj = True
+
+    if config.answerBias:
+        config.answerSumMod = "LIN"
+    config.imageDims = [14, 14, 1024]
+    config.questionLims = [5, 7, 10, 15]
+
 ## dataset specific configs
 loadDatasetConfig = {
     "V7W": configV7W,
@@ -571,5 +595,6 @@ loadDatasetConfig = {
     "CLEVR": configCLEVR,
     "NLVR": configNLVR,
     "VQA": configVQA,
-    "GQA": configGQA
+    "GQA": configGQA,
+    "KGVQA": configKGVQA
 }

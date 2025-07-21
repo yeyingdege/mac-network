@@ -340,7 +340,7 @@ def getBatches(data, batchSize = None, shuffle = True):
 def openImageFiles(images):
     for group in images:
         images[group]["imagesFile"] = h5py.File(images[group]["imagesFilename"], "r")
-        if config.dataset != "CLEVR":
+        if config.dataset != "CLEVR" and config.dataset != "KGVQA":
             with open(images[group]["imgsInfoFilename"], "r") as file:
                 images[group]["imgsInfo"] = json.load(file) 
 

@@ -1,13 +1,12 @@
 import matplotlib
 matplotlib.use('Agg')
-
+import cv2
 import json
 import pandas
 import argparse 
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns; sns.set()
-from scipy.misc import imread, imresize
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 import os
 
@@ -134,7 +133,8 @@ def showImgAtt(img, instance, step, ax):
 
 
 def showImgAtts(instance):
-    img = imread(inImgName(instance))
+    img = cv2.imread(inImgName(instance))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     length = len(instance["attentions"]["kb"])
     

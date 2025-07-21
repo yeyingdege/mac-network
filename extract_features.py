@@ -7,7 +7,7 @@
 import argparse, os, json
 import h5py
 import numpy as np
-from scipy.misc import imread, imresize
+import cv2
 
 import torch
 import torchvision
@@ -56,7 +56,7 @@ def run_batch(cur_batch, model):
   image_batch = torch.FloatTensor(image_batch).cuda()
   image_batch = torch.autograd.Variable(image_batch, volatile=True)
 
-  feats = model(image_batch)
+  feats = model(image_batch) # [128, 1024, 14, 14]
   feats = feats.data.cpu().clone().numpy()
 
   return feats
@@ -86,8 +86,9 @@ def main(args):
     i0 = 0
     cur_batch = []
     for i, (path, idx) in enumerate(input_paths):
-      img = imread(path, mode='RGB')
-      img = imresize(img, img_size, interp='bicubic')
+      img = cv2.imread(path) # bgr
+      img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+      img = cv2.resize(img, img_size, interpolation=cv2.INTER_CUBIC)
       img = img.transpose(2, 0, 1)[None]
       cur_batch.append(img)
       if len(cur_batch) == args.batch_size:
